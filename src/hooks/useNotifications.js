@@ -53,6 +53,8 @@ async function registerPeriodicSync(minutes) {
 export function useNotifications(projects, settings) {
   const [permission, setPermission] = useState(supported ? Notification.permission : "unsupported");
   const timerRef = useRef(null);
+  const firstRunRef = useRef(null);
+  const firstRunDone = useRef(false);
   const projectsRef = useRef(projects);
   const settingsRef = useRef(settings);
 
@@ -65,9 +67,31 @@ export function useNotifications(projects, settings) {
     setPermission(result);
     if (result === "granted") {
       registerPeriodicSync(settingsRef.current?.notify_interval_minutes);
+      // Confirm right away so it's obvious notifications are live.
+      showNotification(
+        "🔔 Notifications on",
+        "You'll get a nudge when projects go untouched. Try the test button in settings.",
+        "welcome"
+      );
     }
     return result;
   };
+
+  // Fire a notification on demand — asks for permission first if needed. Used
+  // by the "Send test notification" button so users can confirm delivery.
+  const sendTest = useCallback(async () => {
+    if (!supported) return "unsupported";
+    let perm = Notification.permission;
+    if (perm === "default") perm = await Notification.requestPermission();
+    setPermission(perm);
+    if (perm !== "granted") return perm;
+    await showNotification(
+      "🔔 SyncPulse test",
+      "Notifications are working. Reminders about untouched projects will look like this.",
+      "test"
+    );
+    return perm;
+  }, []);
 
   const runCheck = useCallback(() => {
     const currentProjects = projectsRef.current;
@@ -122,11 +146,20 @@ export function useNotifications(projects, settings) {
       timerRef.current = setInterval(runCheck, intervalMs);
       if (permission === "granted") {
         registerPeriodicSync(settings.notify_interval_minutes);
+        // Nudge once shortly after load so a reminder actually fires without
+        // waiting a full interval — but only the first time per session.
+        if (!firstRunDone.current) {
+          firstRunDone.current = true;
+          firstRunRef.current = setTimeout(runCheck, 8000);
+        }
       }
     }
 
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (firstRunRef.current) clearTimeout(firstRunRef.current);
+    };
   }, [settings?.notify_interval_minutes, settings?.notifications_enabled, permission, runCheck]);
 
-  return { permission, requestPermission };
+  return { permission, requestPermission, sendTest };
 }

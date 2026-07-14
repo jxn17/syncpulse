@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { db } from "@/api/storage";
-import { X, Save, Bell, Clock } from "lucide-react";
+import { X, Save, Bell, Clock, Send } from "lucide-react";
 
 const INTERVAL_OPTIONS = [
   { label: "15 min", value: 15 },
@@ -12,10 +12,19 @@ const INTERVAL_OPTIONS = [
   { label: "3 hours", value: 180 },
 ];
 
-export default function SettingsModal({ settings, onClose, onSaved }) {
+export default function SettingsModal({ settings, permission, onTest, onClose, onSaved }) {
   const [interval, setInterval] = useState(settings?.notify_interval_minutes || 30);
   const [enabled, setEnabled] = useState(settings?.notifications_enabled !== false);
   const [loading, setLoading] = useState(false);
+  const [testState, setTestState] = useState("idle"); // idle | sending | sent | blocked
+
+  const handleTest = async () => {
+    if (!onTest) return;
+    setTestState("sending");
+    const result = await onTest();
+    setTestState(result === "granted" ? "sent" : "blocked");
+    setTimeout(() => setTestState("idle"), 4000);
+  };
 
   const handleSave = async () => {
     setLoading(true);
@@ -86,8 +95,35 @@ export default function SettingsModal({ settings, onClose, onSaved }) {
               ))}
             </div>
             <p className="text-[11px] font-mono text-muted-foreground mt-2 opacity-70">
-              Browser tab must be open for reminders to fire.
+              Reminders fire while a tab is open. Install SyncPulse as an app (Chrome/Edge) for best-effort background nudges.
             </p>
+          </div>
+
+          {/* Test notification — confirms the browser + OS will actually pop a toast */}
+          <div className="p-3 bg-secondary rounded-xl border border-border">
+            <button
+              onClick={handleTest}
+              disabled={testState === "sending"}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-mono font-semibold border border-border bg-background/40 text-foreground hover:border-primary/50 transition-all disabled:opacity-60"
+            >
+              <Send size={13} />
+              {testState === "sending" ? "sending…" : "Send test notification"}
+            </button>
+            {testState === "sent" && (
+              <p className="text-[11px] font-mono text-green-400 mt-2">
+                Sent ✓ — check the bottom-right of your screen / notification center.
+              </p>
+            )}
+            {testState === "blocked" && (
+              <p className="text-[11px] font-mono text-red-400 mt-2">
+                Blocked — allow notifications for this site in your browser (and turn off Windows Focus Assist).
+              </p>
+            )}
+            {permission === "granted" && testState === "idle" && (
+              <p className="text-[11px] font-mono text-muted-foreground mt-2 opacity-70">
+                Permission granted.
+              </p>
+            )}
           </div>
 
           <button
