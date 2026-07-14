@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://api.fontshare.com/v2/css?f[]=clash-display@400,500,600,700&f[]=satoshi@400,500,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,38 +7,39 @@
 
 @layer base {
   :root {
-    --background: 220 16% 7%;
-    --foreground: 210 40% 96%;
-    --card: 220 14% 10%;
-    --card-foreground: 210 40% 96%;
-    --popover: 220 14% 10%;
-    --popover-foreground: 210 40% 96%;
-    --primary: 262 83% 68%;
+    --background: 250 28% 5%;
+    --foreground: 250 30% 96%;
+    --card: 250 22% 9%;
+    --card-foreground: 250 30% 96%;
+    --popover: 250 22% 9%;
+    --popover-foreground: 250 30% 96%;
+    --primary: 258 88% 68%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 220 14% 14%;
-    --secondary-foreground: 210 40% 96%;
-    --muted: 220 14% 14%;
-    --muted-foreground: 215 20% 55%;
-    --accent: 262 83% 68%;
+    --secondary: 250 18% 13%;
+    --secondary-foreground: 250 30% 96%;
+    --muted: 250 18% 13%;
+    --muted-foreground: 250 14% 60%;
+    --accent: 258 88% 68%;
     --accent-foreground: 0 0% 98%;
     --destructive: 0 72% 60%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 14% 16%;
-    --input: 220 14% 16%;
-    --ring: 262 83% 68%;
+    --border: 250 16% 16%;
+    --input: 250 16% 16%;
+    --ring: 258 88% 68%;
     --radius: 0.75rem;
-    --font-heading: 'Space Grotesk', sans-serif;
-    --font-body: 'Space Grotesk', sans-serif;
-    --font-display: 'Space Grotesk', sans-serif;
+    --mint: 158 64% 52%;
+    --font-heading: 'Clash Display', sans-serif;
+    --font-body: 'Satoshi', sans-serif;
+    --font-display: 'Clash Display', sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
-    --sidebar-background: 220 16% 7%;
-    --sidebar-foreground: 210 40% 96%;
-    --sidebar-primary: 262 83% 68%;
+    --sidebar-background: 250 28% 5%;
+    --sidebar-foreground: 250 30% 96%;
+    --sidebar-primary: 258 88% 68%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 220 14% 14%;
-    --sidebar-accent-foreground: 210 40% 96%;
-    --sidebar-border: 220 14% 16%;
-    --sidebar-ring: 262 83% 68%;
+    --sidebar-accent: 250 18% 13%;
+    --sidebar-accent-foreground: 250 30% 96%;
+    --sidebar-border: 250 16% 16%;
+    --sidebar-ring: 258 88% 68%;
   }
 }
 
@@ -52,10 +54,20 @@
 
 /* Pixel grid background */
 .pixel-bg {
-  background-image: 
+  background-image:
     linear-gradient(rgba(139, 92, 246, 0.03) 1px, transparent 1px),
     linear-gradient(90deg, rgba(139, 92, 246, 0.03) 1px, transparent 1px);
   background-size: 20px 20px;
+}
+
+/* Aurora wash: brand purple in the north-west, "alive" green in the south-east.
+   Green is the app's semantic color for touched/healthy projects, so the light
+   itself leans toward where the work is alive. */
+.aurora {
+  background:
+    radial-gradient(55rem 34rem at 12% -4%, rgba(139, 92, 246, 0.16), transparent 62%),
+    radial-gradient(50rem 36rem at 92% 108%, rgba(52, 211, 153, 0.11), transparent 62%),
+    radial-gradient(34rem 26rem at 78% 12%, rgba(139, 92, 246, 0.07), transparent 60%);
 }
 
 /* Glow effects */
@@ -94,10 +106,90 @@
   image-rendering: pixelated;
 }
 
-/* Card hover effect */
+/* Card hover effect (mobile / fallback grid) */
 .project-card {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .project-card:hover {
   transform: translateY(-2px);
+}
+
+/* ---------------------------------------------------------------------------
+   Iso-orbit stage
+   A tilted plane spins slowly about its own normal (the "orbit") while each
+   tile counter-rotates by the exact opposite angle. Net effect: tile positions
+   sweep around the center but every card keeps a constant, readable
+   orientation — a carousel, not a record player. Each tile also bobs along the
+   plane normal on its own phase. Hovering any card adds .orbit-paused to the
+   scene, freezing spin + counter-spin + bob together (same play-state, so the
+   spin/counter pair never desyncs).
+--------------------------------------------------------------------------- */
+.orbit-scene {
+  perspective: 1500px;
+}
+.orbit-plane {
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateX(54deg) rotateZ(45deg);
+  animation: orbit-spin 90s linear infinite;
+  will-change: transform;
+}
+.orbit-slot {
+  position: absolute;
+  transform-style: preserve-3d;
+}
+.orbit-counter {
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transform: rotateZ(-45deg);
+  animation: orbit-counter 90s linear infinite;
+}
+.orbit-bob {
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  animation: orbit-bob var(--bob-duration, 6s) ease-in-out var(--bob-delay, 0s) infinite;
+}
+.orbit-lift {
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transform: translateZ(var(--lift, 0px)) scale(var(--lift-scale, 1));
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.orbit-shadow {
+  position: absolute;
+  inset: 6%;
+  border-radius: 28px;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), transparent 78%);
+  transform: translateZ(1px);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+
+.orbit-paused .orbit-plane,
+.orbit-paused .orbit-counter,
+.orbit-paused .orbit-bob {
+  animation-play-state: paused;
+}
+
+@keyframes orbit-spin {
+  from { transform: rotateX(54deg) rotateZ(0deg); }
+  to   { transform: rotateX(54deg) rotateZ(360deg); }
+}
+@keyframes orbit-counter {
+  from { transform: rotateZ(0deg); }
+  to   { transform: rotateZ(-360deg); }
+}
+@keyframes orbit-bob {
+  0%, 100% { transform: translateZ(0px); }
+  50%      { transform: translateZ(18px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbit-plane,
+  .orbit-counter,
+  .orbit-bob {
+    animation: none;
+  }
 }
