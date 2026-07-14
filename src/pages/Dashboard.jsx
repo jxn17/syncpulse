@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { db } from "@/api/storage";
-import { Plus, Github, CheckCircle2, Bell, Settings } from "lucide-react";
+import { Plus, Github, CheckCircle2, Bell, Settings, HelpCircle } from "lucide-react";
 
 import { isToday, differenceInDays } from "date-fns";
 import ProjectCard from "@/components/ProjectCard";
 import AddProjectModal, { MAX_PROJECTS } from "@/components/AddProjectModal";
 import OrbitStage from "@/components/OrbitStage";
 import SettingsModal from "@/components/SettingsModal";
+import FAQModal from "@/components/FAQModal";
 import NeglectAlert from "@/components/NeglectAlert";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -16,8 +17,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showFAQ, setShowFAQ] = useState(false);
   const [appSettings, setAppSettings] = useState(null);
-  const { permission, requestPermission } = useNotifications(projects, appSettings);
+  const { permission, requestPermission, sendTest } = useNotifications(projects, appSettings);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -250,10 +252,24 @@ export default function Dashboard() {
       {showSettings && appSettings && (
         <SettingsModal
           settings={appSettings}
+          permission={permission}
+          onTest={sendTest}
           onClose={() => setShowSettings(false)}
           onSaved={(s) => setAppSettings(s)}
         />
       )}
+
+      {/* FAQ — always reachable from the bottom-left corner */}
+      <button
+        onClick={() => setShowFAQ(true)}
+        title="Frequently asked questions"
+        className="fixed bottom-4 left-4 z-40 flex items-center gap-2 pl-3 pr-4 py-2.5 rounded-full bg-secondary/90 backdrop-blur-md border border-border text-muted-foreground hover:text-foreground hover:border-primary/50 shadow-lg transition-all"
+      >
+        <HelpCircle size={16} className="text-primary" />
+        <span className="font-mono text-xs font-semibold">FAQ</span>
+      </button>
+
+      {showFAQ && <FAQModal onClose={() => setShowFAQ(false)} />}
     </div>
   );
 }
