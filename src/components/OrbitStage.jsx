@@ -3,19 +3,31 @@ import { motion, AnimatePresence } from "framer-motion";
 import { db } from "@/api/storage";
 import { getHeatStatus } from "@/lib/heat";
 import { useSize } from "@/hooks/use-size";
-import { Github, Zap, Trash2, Clock, Flame, Target, Pencil, Plus } from "lucide-react";
+import { Github, Zap, Trash2, Target, Pencil, Plus } from "lucide-react";
 import EditProjectModal from "@/components/EditProjectModal";
 import { MAX_PROJECTS } from "@/components/AddProjectModal";
 
 const TILE = 200;
 const GAP = Math.round(TILE * 0.18); // spacing 18%
 const STEP = TILE + GAP;
-const RADIUS = Math.round(TILE * 0.03); // corner radius 3%
+const RADIUS = 28; // ≈3.5% of the stage width — the big soft corners in the reference
 const STAGE_PAD = 0.06; // padding 6%
-// The swing (±13.5°) never completes a revolution, so the sweep footprint is
-// far smaller than a full spin — these bounds hug the swept extremes.
-const DESIGN_W = 980;
-const DESIGN_H = 560;
+// The swing (±9°) never completes a revolution, so the sweep footprint is far
+// smaller than a full spin — these bounds hug the swept extremes at 68° tilt.
+const DESIGN_W = 960;
+const DESIGN_H = 520;
+
+// Card faces are light against the dark stage (like the reference deck), so
+// status colors are the dark-on-cream cuts.
+const CREAM = "#EFEDE4";
+const INK = "#17151F";
+
+function statusOf(heat) {
+  if (heat.days === 0) return { label: "today ✓", color: "#15803D" };
+  if (heat.days === 1) return { label: "yesterday", color: "#A16207" };
+  if (heat.days >= 2 && heat.days < 999) return { label: `cold · ${heat.days}d`, color: "#B91C1C" };
+  return { label: "never touched", color: "#6B7280" };
+}
 
 // 8 slots, 4 x 2, centered on the plane origin.
 const SLOTS = Array.from({ length: MAX_PROJECTS }, (_, i) => ({
@@ -25,6 +37,7 @@ const SLOTS = Array.from({ length: MAX_PROJECTS }, (_, i) => ({
 
 function OrbitTile({ project, slot, index, hovered, onHoverChange, onTouch, onFocusToggle, onDelete, onEditOpen }) {
   const heat = getHeatStatus(project.last_touched);
+  const status = statusOf(heat);
   const accentColor = project.color || "#8B5CF6";
   const isTouchedToday = heat.days === 0;
   const [touching, setTouching] = useState(false);
@@ -87,121 +100,133 @@ function OrbitTile({ project, slot, index, hovered, onHoverChange, onTouch, onFo
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.5 }}
               transition={{ type: "spring", stiffness: 260, damping: 22, delay: index * 0.06 }}
-              className="group relative w-full h-full border p-4 flex flex-col overflow-hidden"
+              className="relative w-full h-full p-5 flex flex-col overflow-hidden"
               style={{
                 borderRadius: RADIUS,
-                background: "linear-gradient(160deg, hsl(250 22% 13%) 0%, hsl(250 25% 8%) 100%)",
-                borderColor: project.is_focused ? accentColor : "hsl(250 16% 20%)",
+                backgroundColor: project.is_focused ? accentColor : CREAM,
+                color: project.is_focused ? "#FFFFFF" : INK,
                 boxShadow: project.is_focused
-                  ? `0 0 34px ${accentColor}45, 0 0 80px ${accentColor}18, inset 0 1px 0 rgba(255,255,255,0.06)`
+                  ? `0 0 40px ${accentColor}55, 0 0 90px ${accentColor}20`
                   : hovered
-                    ? `0 0 28px ${accentColor}30, inset 0 1px 0 rgba(255,255,255,0.06)`
-                    : "inset 0 1px 0 rgba(255,255,255,0.05)",
+                    ? `0 0 34px ${accentColor}35`
+                    : "0 2px 24px rgba(0,0,0,0.35)",
               }}
             >
-              {/* Accent edge */}
-              <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ backgroundColor: accentColor, opacity: 0.85 }} />
-
-              {/* Status badge */}
-              {project.is_focused ? (
-                <div
-                  className="absolute top-3 right-3 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold"
-                  style={{ backgroundColor: `${accentColor}20`, color: accentColor, border: `1px solid ${accentColor}40` }}
+              {/* Top row: accent mark + status */}
+              <div className="flex items-center">
+                <span
+                  className="w-3.5 h-3.5 rounded-full"
+                  style={{ backgroundColor: project.is_focused ? "rgba(255,255,255,0.9)" : accentColor }}
+                />
+                <span
+                  className="ml-auto font-mono text-[9px] font-bold uppercase tracking-[0.14em]"
+                  style={{ color: project.is_focused ? "rgba(255,255,255,0.85)" : status.color }}
                 >
-                  <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: accentColor }} />
-                  FOCUSED
-                </div>
-              ) : heat.days >= 2 ? (
-                <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-red-500/10 text-red-400 border border-red-500/20">
-                  ⚠ COLD
-                </div>
-              ) : null}
-
-              {/* Name + description */}
-              <div className="mt-2 pr-10">
-                <h3 className="font-heading font-semibold text-[17px] leading-tight text-foreground tracking-tight line-clamp-2">
-                  {project.name}
-                </h3>
-                {project.description && (
-                  <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2 font-body leading-snug group-hover:opacity-0 transition-opacity">
-                    {project.description}
-                  </p>
-                )}
+                  {project.is_focused ? "● focused" : status.label}
+                </span>
               </div>
 
-              {/* Chips */}
-              <div className="flex items-center gap-1.5 mt-auto mb-9">
-                <div
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold ${heat.glow}`}
-                  style={{ backgroundColor: `${heat.color}15`, color: heat.color, border: `1px solid ${heat.color}30` }}
-                >
-                  <Clock size={9} />
-                  {heat.label}
-                </div>
-                {(project.streak || 0) > 1 && (
-                  <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-orange-500/10 text-orange-400 border border-orange-500/20">
-                    <Flame size={9} />
-                    {project.streak}d
+              {/* Name — the hero, big display type like the reference deck */}
+              <h3
+                className="font-heading font-semibold mt-3 tracking-tight line-clamp-3"
+                style={{ fontSize: 23, lineHeight: 1.02 }}
+              >
+                {project.name}
+              </h3>
+
+              {/* Bottom: streak dots + oversized touch-count numeral */}
+              <div className="mt-auto flex items-end">
+                {(project.streak || 0) > 0 && (
+                  <div className="flex items-center gap-1 pb-1">
+                    {Array.from({ length: Math.min(project.streak || 0, 7) }, (_, d) => (
+                      <span
+                        key={d}
+                        className="w-[7px] h-[7px] rounded-full"
+                        style={{ backgroundColor: project.is_focused ? "rgba(255,255,255,0.9)" : accentColor }}
+                      />
+                    ))}
+                    <span
+                      className="font-mono text-[9px] font-bold ml-1"
+                      style={{ color: project.is_focused ? "rgba(255,255,255,0.75)" : `${INK}99` }}
+                    >
+                      {project.streak}d
+                    </span>
                   </div>
                 )}
-                <div className="flex items-center gap-0.5 text-[10px] font-mono text-muted-foreground ml-auto">
-                  <Zap size={9} />
-                  {project.touch_count || 0}x
-                </div>
-              </div>
-
-              {/* Actions — revealed while the card is held */}
-              <div className="absolute left-3 right-3 bottom-3 flex items-center gap-1 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200">
-                <button
-                  onClick={handleTouch}
-                  disabled={touching || isTouchedToday}
-                  className="flex-1 py-1.5 rounded-lg text-[11px] font-mono font-semibold transition-all disabled:opacity-60"
-                  style={isTouchedToday
-                    ? { backgroundColor: `${accentColor}18`, color: accentColor, border: `1px solid ${accentColor}30` }
-                    : { backgroundColor: accentColor, color: "white", boxShadow: `0 0 12px ${accentColor}40` }
-                  }
+                <span
+                  className="ml-auto font-heading font-bold select-none"
+                  style={{
+                    fontSize: 42,
+                    lineHeight: 0.8,
+                    letterSpacing: "-0.03em",
+                    color: project.is_focused ? "rgba(255,255,255,0.35)" : accentColor,
+                    opacity: project.is_focused ? 1 : 0.3,
+                  }}
                 >
-                  {isTouchedToday ? "✓" : touching ? "…" : "touch"}
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onFocusToggle(project.id, !project.is_focused); }}
-                  title={project.is_focused ? "Unfocus" : "Set as focused"}
-                  className={`p-1.5 rounded-lg border transition-all ${
-                    project.is_focused
-                      ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
-                      : "bg-secondary text-muted-foreground border-border hover:text-foreground"
-                  }`}
-                >
-                  <Target size={13} />
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onEditOpen(project); }}
-                  title="Edit project"
-                  className="p-1.5 rounded-lg bg-secondary text-muted-foreground border border-border hover:text-foreground transition-colors"
-                >
-                  <Pencil size={13} />
-                </button>
-                {project.repo_url && (
-                  <a
-                    href={project.repo_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="p-1.5 rounded-lg bg-secondary text-muted-foreground border border-border hover:text-foreground transition-colors"
-                  >
-                    <Github size={13} />
-                  </a>
-                )}
-                <button
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  title="Delete project"
-                  className="p-1.5 rounded-lg bg-secondary text-muted-foreground border border-border hover:text-red-400 hover:border-red-500/30 transition-colors"
-                >
-                  <Trash2 size={13} />
-                </button>
+                  {project.touch_count || 0}×
+                </span>
               </div>
             </motion.div>
+
+            {/* Action tray — slides out from behind the hovered card, like
+                Chrome's fullscreen bar but anchored to the card itself */}
+            <div
+              className={`absolute left-1/2 top-full z-10 flex items-center gap-1 p-1.5 rounded-2xl border border-white/10 shadow-2xl backdrop-blur-md transition-all duration-300 ${
+                hovered
+                  ? "opacity-100 -translate-x-1/2 translate-y-2"
+                  : "opacity-0 -translate-x-1/2 -translate-y-4 pointer-events-none"
+              }`}
+              style={{ backgroundColor: "rgba(23,21,31,0.92)" }}
+            >
+              <button
+                onClick={handleTouch}
+                disabled={touching || isTouchedToday}
+                className="px-3 py-2 rounded-xl text-[11px] font-mono font-semibold whitespace-nowrap transition-all disabled:opacity-60 flex items-center gap-1.5"
+                style={isTouchedToday
+                  ? { backgroundColor: `${accentColor}22`, color: accentColor }
+                  : { backgroundColor: accentColor, color: "white", boxShadow: `0 0 14px ${accentColor}50` }
+                }
+              >
+                <Zap size={12} />
+                {isTouchedToday ? "done" : touching ? "…" : "touch"}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onFocusToggle(project.id, !project.is_focused); }}
+                title={project.is_focused ? "Unfocus" : "Set as focused"}
+                className={`p-2 rounded-xl transition-colors ${
+                  project.is_focused ? "text-yellow-300 bg-yellow-400/10" : "text-white/60 hover:text-white hover:bg-white/10"
+                }`}
+              >
+                <Target size={14} />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onEditOpen(project); }}
+                title="Edit project"
+                className="p-2 rounded-xl text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <Pencil size={14} />
+              </button>
+              {project.repo_url && (
+                <a
+                  href={project.repo_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  title="Open repository"
+                  className="p-2 rounded-xl text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  <Github size={14} />
+                </a>
+              )}
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                title="Delete project"
+                className="p-2 rounded-xl text-white/60 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -116,7 +116,7 @@
 
 /* ---------------------------------------------------------------------------
    Iso-orbit stage
-   A tilted plane swings about its own normal (±13.5° around the 45° pose, 27°
+   A tilted plane swings about its own normal (±9° around the 45° pose, 18°
    total sweep, 10s loop) while each tile counter-swings by the exact opposite
    angle on the same easing. Net effect: tile positions sweep back and forth
    but every card keeps a constant, readable orientation. Each tile also bobs
@@ -130,7 +130,7 @@
 .orbit-plane {
   position: relative;
   transform-style: preserve-3d;
-  transform: rotateX(63deg) rotateZ(45deg);
+  transform: rotateX(68deg) rotateZ(45deg);
   animation: orbit-swing 10s ease-in-out infinite;
   will-change: transform;
 }
@@ -161,7 +161,7 @@
 .orbit-shadow {
   position: absolute;
   inset: 6%;
-  border-radius: 10px;
+  border-radius: 28px;
   background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), transparent 78%);
   transform: translateZ(1px);
   transition: opacity 0.45s ease, transform 0.45s ease;
@@ -174,12 +174,12 @@
 }
 
 @keyframes orbit-swing {
-  0%, 100% { transform: rotateX(63deg) rotateZ(31.5deg); }
-  50%      { transform: rotateX(63deg) rotateZ(58.5deg); }
+  0%, 100% { transform: rotateX(68deg) rotateZ(36deg); }
+  50%      { transform: rotateX(68deg) rotateZ(54deg); }
 }
 @keyframes orbit-counter-swing {
-  0%, 100% { transform: rotateZ(-31.5deg); }
-  50%      { transform: rotateZ(-58.5deg); }
+  0%, 100% { transform: rotateZ(-36deg); }
+  50%      { transform: rotateZ(-54deg); }
 }
 @keyframes orbit-bob {
   0%, 100% { transform: translateZ(0px); }
