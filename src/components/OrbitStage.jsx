@@ -13,9 +13,10 @@ const STEP = TILE + GAP;
 const RADIUS = 28; // ≈3.5% of the stage width — the big soft corners in the reference
 const STAGE_PAD = 0.06; // padding 6%
 // The swing (±9°) never completes a revolution, so the sweep footprint is far
-// smaller than a full spin — these bounds hug the swept extremes at 68° tilt.
+// smaller than a full spin — these bounds hug the swept extremes at 68° tilt,
+// plus headroom for the upright cards rising off the floor.
 const DESIGN_W = 960;
-const DESIGN_H = 520;
+const DESIGN_H = 640;
 
 // Card faces are light against the dark stage (like the reference deck), so
 // status colors are the dark-on-cream cuts.
@@ -95,6 +96,7 @@ function OrbitTile({ project, slot, index, hovered, onHoverChange, onTouch, onFo
             onMouseEnter={() => onHoverChange(project.id, true)}
             onMouseLeave={() => onHoverChange(project.id, false)}
           >
+            <div className="orbit-stand">
             <motion.div
               initial={{ opacity: 0, scale: 0.5 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -227,6 +229,7 @@ function OrbitTile({ project, slot, index, hovered, onHoverChange, onTouch, onFo
                 <Trash2 size={14} />
               </button>
             </div>
+            </div>
           </div>
         </div>
       </div>
@@ -251,6 +254,7 @@ function GhostTile({ slot, index, canAdd, onAdd }) {
       <div className="orbit-counter">
         <div className="orbit-shadow" style={{ opacity: 0.3 }} />
         <div className="orbit-bob" style={{ "--bob-delay": `${-index * 1.25}s` }}>
+          <div className="orbit-stand">
           <button
             onClick={canAdd ? onAdd : undefined}
             disabled={!canAdd}
@@ -264,6 +268,7 @@ function GhostTile({ slot, index, canAdd, onAdd }) {
             </span>
             <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground/70">open slot</span>
           </button>
+          </div>
         </div>
       </div>
     </div>
@@ -315,7 +320,7 @@ export default function OrbitStage({ projects, onTouch, onFocusToggle, onDelete,
           marginLeft: size ? (size.width - DESIGN_W) / 2 : undefined,
         }}
       >
-        <div className="orbit-plane" style={{ position: "absolute", left: "50%", top: "56%", width: 0, height: 0 }}>
+        <div className="orbit-plane" style={{ position: "absolute", left: "50%", top: "62%", width: 0, height: 0 }}>
           <AnimatePresence>
             {SLOTS.map((slot, i) => {
               const project = ordered[i];
