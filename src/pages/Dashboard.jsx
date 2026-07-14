@@ -214,9 +214,9 @@ export default function Dashboard() {
       </div>
 
       {/* Orbit stage — full-bleed on desktop so the zoom can fill the screen.
-          Pulled up toward the header so the scene sits higher on the page. */}
+          Pulled up under the header so the scene sits high on the page. */}
       {!loading && projects.length > 0 && !isMobile && (
-        <div className="relative w-full -mt-10">
+        <div className="relative w-full -mt-28">
           <OrbitStage
             projects={projects}
             onDelete={handleDelete}
