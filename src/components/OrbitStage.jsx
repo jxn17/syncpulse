@@ -13,6 +13,7 @@ const GAP = Math.round(TILE * 0.18); // spacing 18%
 const STEP = TILE + GAP;
 const RADIUS = 28; // ≈3.5% of the stage width — the big soft corners in the reference
 const STAGE_PAD = 0.06; // padding 6%
+const DRAG_THRESHOLD = 6; // px of movement before a press becomes a drag (vs a click)
 // The swing (±25°) never completes a revolution, so the sweep footprint is
 // smaller than a full spin — these bounds hug the swept extremes at 63° tilt,
 // plus headroom for the upright cards rising off the floor.
@@ -40,16 +41,16 @@ const SLOTS = [
   [-1, 1],  [0, 1],  [1, 1],
 ].map(([cx, cy]) => ({ x: cx * STEP, y: cy * STEP }));
 
-function OrbitTile({ project, slot, index, hovered, onHoverChange }) {
+function OrbitTile({ project, slot, index, hovered, isDragging, onHoverChange, onCardMouseDown }) {
   const heat = getHeatStatus(project.last_touched);
   const status = statusOf(heat);
   const accentColor = project.color || "#8B5CF6";
   const cardRef = useRef(null);
 
-  // A hovered card lifts well clear of the floor so it — and the action tray
-  // pinned to it — always read as sitting above its neighbours.
-  const lift = (project.is_focused ? 64 : 0) + (hovered ? 72 : 0);
-  const raised = hovered || project.is_focused;
+  // A hovered card lifts clear of the floor; a dragged card lifts higher still
+  // so it clearly floats above its neighbours as they shuffle to make room.
+  const lift = (project.is_focused ? 64 : 0) + (isDragging ? 128 : hovered ? 72 : 0);
+  const raised = hovered || project.is_focused || isDragging;
 
   return (
     <div
@@ -62,6 +63,7 @@ function OrbitTile({ project, slot, index, hovered, onHoverChange }) {
         marginLeft: -TILE / 2,
         marginTop: -TILE / 2,
         transform: `translate3d(${slot.x}px, ${slot.y}px, 0)`,
+        zIndex: isDragging ? 30 : hovered ? 20 : 1,
       }}
     >
       <div className="orbit-counter">
@@ -75,7 +77,8 @@ function OrbitTile({ project, slot, index, hovered, onHoverChange }) {
         <div className="orbit-bob" style={{ "--bob-delay": `${-index * 0.625}s` }}>
           <div
             className="orbit-lift"
-            style={{ "--lift": `${lift}px`, "--lift-scale": hovered ? 1.05 : 1 }}
+            data-project-id={project.id}
+            style={{ "--lift": `${lift}px`, "--lift-scale": isDragging ? 1.12 : hovered ? 1.05 : 1 }}
             onMouseEnter={() => onHoverChange(project.id, true, cardRef.current)}
             onMouseLeave={() => onHoverChange(project.id, false)}
           >
@@ -86,16 +89,21 @@ function OrbitTile({ project, slot, index, hovered, onHoverChange }) {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.5 }}
                 transition={{ type: "spring", stiffness: 260, damping: 22, delay: index * 0.06 }}
-                className="relative w-full h-full p-5 flex flex-col overflow-hidden"
+                onMouseDown={(e) => onCardMouseDown(project.id, e)}
+                className={`relative w-full h-full p-5 flex flex-col overflow-hidden select-none ${
+                  isDragging ? "cursor-grabbing" : "cursor-grab"
+                }`}
                 style={{
                   borderRadius: RADIUS,
                   backgroundColor: project.is_focused ? accentColor : CREAM,
                   color: project.is_focused ? "#FFFFFF" : INK,
                   boxShadow: project.is_focused
                     ? `0 0 40px ${accentColor}55, 0 0 90px ${accentColor}20`
-                    : hovered
-                      ? `0 0 34px ${accentColor}35`
-                      : "0 2px 24px rgba(0,0,0,0.35)",
+                    : isDragging
+                      ? `0 26px 60px rgba(0,0,0,0.55), 0 0 44px ${accentColor}45`
+                      : hovered
+                        ? `0 0 34px ${accentColor}35`
+                        : "0 2px 24px rgba(0,0,0,0.35)",
                 }}
               >
                 {/* Top row: accent mark + status */}
@@ -305,25 +313,44 @@ function GhostTile({ slot, index, canAdd, onAdd }) {
   );
 }
 
-export default function OrbitStage({ projects, onTouch, onFocusToggle, onDelete, onEdit, onAdd }) {
+export default function OrbitStage({ projects, onTouch, onFocusToggle, onDelete, onEdit, onReorder, onAdd }) {
   const containerRef = useRef(null);
   const size = useSize(containerRef);
   const [hoveredId, setHoveredId] = useState(null);
   const [hoveredRect, setHoveredRect] = useState(null);
   const [editingProject, setEditingProject] = useState(null);
+  const [dragId, setDragId] = useState(null);
+  const [dragOrder, setDragOrder] = useState(null); // array of project ids while dragging
   const hoveredElRef = useRef(null);
   const clearTimer = useRef(null);
+  const dragRef = useRef(null); // { id, startX, startY, moved, orderIds }
 
-  // Stable slot order: creation order, so cards never swap tiles mid-orbit
-  // when touching reshuffles the "-last_touched" sort used elsewhere.
-  const ordered = useMemo(
-    () => [...projects].sort((a, b) => (a.created_at || "").localeCompare(b.created_at || "")).slice(0, MAX_PROJECTS),
-    [projects]
-  );
+  // Stable order: persisted `order` field when present, else creation order —
+  // so cards keep their tiles until the user deliberately drags them.
+  const ordered = useMemo(() => {
+    const arr = [...projects];
+    const hasOrder = arr.some((p) => typeof p.order === "number");
+    arr.sort((a, b) => {
+      if (hasOrder) {
+        const ao = typeof a.order === "number" ? a.order : 1e9;
+        const bo = typeof b.order === "number" ? b.order : 1e9;
+        if (ao !== bo) return ao - bo;
+      }
+      return (a.created_at || "").localeCompare(b.created_at || "");
+    });
+    return arr.slice(0, MAX_PROJECTS);
+  }, [projects]);
+
+  const projectsById = useMemo(() => Object.fromEntries(projects.map((p) => [p.id, p])), [projects]);
+  const orderedIds = useMemo(() => ordered.map((p) => p.id), [ordered]);
+
+  // While dragging, render from the working order so cards shuffle live.
+  const displayList = dragId && dragOrder
+    ? dragOrder.map((id) => projectsById[id]).filter(Boolean)
+    : ordered;
 
   // Zoom to fill: as large as the container width and the remaining viewport
-  // height allow (6% stage padding on both axes), so the swing never leaves
-  // the screen.
+  // height allow (6% stage padding on both axes).
   const scale = useMemo(() => {
     if (!size) return 1;
     const el = containerRef.current;
@@ -336,11 +363,10 @@ export default function OrbitStage({ projects, onTouch, onFocusToggle, onDelete,
     );
   }, [size]);
 
-  const paused = hoveredId !== null || editingProject !== null;
+  const paused = hoveredId !== null || editingProject !== null || dragId !== null;
 
   // Keep the flat action tray glued to the hovered card: re-measure every
-  // frame while a card is hovered, so the tray tracks the lift transition and
-  // any scroll without ever detaching from the card.
+  // frame while a card is hovered.
   useEffect(() => {
     if (hoveredId == null) return undefined;
     let raf;
@@ -363,11 +389,10 @@ export default function OrbitStage({ projects, onTouch, onFocusToggle, onDelete,
 
   useEffect(() => () => clearTimeout(clearTimer.current), []);
 
-  // Hover bridge: the card face and the portalled tray are separate DOM
-  // subtrees, so the cursor briefly crosses empty space between them. A short
-  // grace period on leave (cancelled the instant either element is entered)
-  // means that gap no longer restarts the orbit motion.
+  // Hover bridge (see ActionTray): a short grace period on leave, cancelled the
+  // instant either the card or the tray is entered. Suppressed during a drag.
   const keepHover = (id, el) => {
+    if (dragRef.current) return;
     clearTimeout(clearTimer.current);
     if (el) hoveredElRef.current = el;
     setHoveredId(id);
@@ -383,12 +408,88 @@ export default function OrbitStage({ projects, onTouch, onFocusToggle, onDelete,
     else releaseHover(id);
   };
 
+  // ---- Drag-to-reorder + click-to-edit -----------------------------------
+  // A press on a card starts a candidate drag. If the pointer travels past the
+  // threshold it becomes a drag (cards shuffle to make room, orbit frozen);
+  // otherwise the release is treated as a click and opens the edit modal.
+  const handleMove = (e) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const dist = Math.hypot(e.clientX - d.startX, e.clientY - d.startY);
+    if (!d.moved) {
+      if (dist < DRAG_THRESHOLD) return;
+      d.moved = true;
+      setHoveredId(null);
+      setDragId(d.id);
+      setDragOrder(d.orderIds.slice());
+      // Cache each slot's on-screen centre now, while every card is still at
+      // rest (the lift hasn't applied yet this tick). These screen positions
+      // are fixed for the frozen orbit, so targeting them — rather than the
+      // cards, which glide as they make room — keeps the drop point stable.
+      const root = containerRef.current;
+      const byId = {};
+      if (root) {
+        for (const c of root.querySelectorAll(".orbit-lift[data-project-id]")) {
+          const r = c.getBoundingClientRect();
+          byId[c.getAttribute("data-project-id")] = { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+        }
+      }
+      // slotCenters[i] === screen centre of slot i (the card currently there).
+      d.slotCenters = d.orderIds.map((id) => byId[id]).filter(Boolean);
+    }
+    if (!d.slotCenters || !d.slotCenters.length) return;
+
+    // Slot nearest the cursor is where the dragged card should land.
+    let target = 0;
+    let best = Infinity;
+    d.slotCenters.forEach((c, i) => {
+      const dd = Math.hypot(e.clientX - c.cx, e.clientY - c.cy);
+      if (dd < best) { best = dd; target = i; }
+    });
+
+    const others = d.orderIds.filter((id) => id !== d.id);
+    const pos = Math.max(0, Math.min(target, others.length));
+    others.splice(pos, 0, d.id);
+    if (others.join("|") !== d.orderIds.join("|")) {
+      d.orderIds = others;
+      setDragOrder(others);
+    }
+  };
+
+  const handleUp = () => {
+    window.removeEventListener("mousemove", handleMove);
+    window.removeEventListener("mouseup", handleUp);
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (!d) return;
+    if (d.moved) {
+      const finalIds = d.orderIds.slice();
+      setDragId(null);
+      setDragOrder(null);
+      if (finalIds.join("|") !== orderedIds.join("|")) onReorder?.(finalIds);
+    } else {
+      // A clean click — open the editor for that project.
+      const proj = projectsById[d.id];
+      setDragId(null);
+      setDragOrder(null);
+      if (proj) setEditingProject(proj);
+    }
+  };
+
+  const handleCardMouseDown = (projectId, e) => {
+    if (e.button !== 0) return; // left button only
+    e.preventDefault();
+    dragRef.current = { id: projectId, startX: e.clientX, startY: e.clientY, moved: false, orderIds: orderedIds.slice() };
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+  };
+
   const hoveredProject = hoveredId != null ? ordered.find((p) => p.id === hoveredId) : null;
 
   return (
     <div ref={containerRef} className="w-full" style={{ height: DESIGN_H * scale }}>
       <div
-        className={`orbit-scene relative ${paused ? "orbit-paused" : ""}`}
+        className={`orbit-scene relative ${paused ? "orbit-paused" : ""} ${dragId ? "orbit-dragging" : ""}`}
         style={{
           width: DESIGN_W,
           height: DESIGN_H,
@@ -400,7 +501,7 @@ export default function OrbitStage({ projects, onTouch, onFocusToggle, onDelete,
         <div className="orbit-plane" style={{ position: "absolute", left: "50%", top: "50%", width: 0, height: 0 }}>
           <AnimatePresence>
             {SLOTS.map((slot, i) => {
-              const project = ordered[i];
+              const project = displayList[i];
               return project ? (
                 <OrbitTile
                   key={project.id}
@@ -408,7 +509,9 @@ export default function OrbitStage({ projects, onTouch, onFocusToggle, onDelete,
                   slot={slot}
                   index={i}
                   hovered={hoveredId === project.id}
+                  isDragging={dragId === project.id}
                   onHoverChange={handleHoverChange}
+                  onCardMouseDown={handleCardMouseDown}
                 />
               ) : (
                 <GhostTile key={`ghost-${i}`} slot={slot} index={i} canAdd={!!onAdd} onAdd={onAdd} />
@@ -419,8 +522,8 @@ export default function OrbitStage({ projects, onTouch, onFocusToggle, onDelete,
       </div>
 
       {/* Flat, always-on-top action controls for the hovered card. Hidden
-          while an edit modal is open so it can't sit over the dialog. */}
-      {hoveredProject && !editingProject && (
+          while dragging or when an edit modal is open. */}
+      {hoveredProject && !editingProject && !dragId && (
         <ActionTray
           project={hoveredProject}
           rect={hoveredRect}

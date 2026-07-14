@@ -137,6 +137,12 @@
 .orbit-slot {
   position: absolute;
   transform-style: preserve-3d;
+  /* Only the translate3d slot position changes on reorder, so this glide is
+     inert during the normal swing and animates cards making room on drag. */
+  transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.orbit-dragging {
+  cursor: grabbing;
 }
 .orbit-counter {
   width: 100%;
