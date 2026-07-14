@@ -12,11 +12,11 @@ const GAP = Math.round(TILE * 0.18); // spacing 18%
 const STEP = TILE + GAP;
 const RADIUS = 28; // ≈3.5% of the stage width — the big soft corners in the reference
 const STAGE_PAD = 0.06; // padding 6%
-// The swing (±9°) never completes a revolution, so the sweep footprint is far
-// smaller than a full spin — these bounds hug the swept extremes at 68° tilt,
+// The swing (±25°) never completes a revolution, so the sweep footprint is
+// smaller than a full spin — these bounds hug the swept extremes at 63° tilt,
 // plus headroom for the upright cards rising off the floor.
-const DESIGN_W = 960;
-const DESIGN_H = 640;
+const DESIGN_W = 900;
+const DESIGN_H = 650;
 
 // Card faces are light against the dark stage (like the reference deck), so
 // status colors are the dark-on-cream cuts.
@@ -30,11 +30,14 @@ function statusOf(heat) {
   return { label: "never touched", color: "#6B7280" };
 }
 
-// 8 slots, 4 x 2, centered on the plane origin.
-const SLOTS = Array.from({ length: MAX_PROJECTS }, (_, i) => ({
-  x: (i % 4 - 1.5) * STEP,
-  y: (Math.floor(i / 4) - 0.5) * STEP,
-}));
+// 8 slots arranged as the reference video's 3x3 grid minus its center — a
+// ring around the plane origin, so spacing between neighbors matches the
+// video exactly while keeping the 8-project cap.
+const SLOTS = [
+  [-1, -1], [0, -1], [1, -1],
+  [-1, 0],           [1, 0],
+  [-1, 1],  [0, 1],  [1, 1],
+].map(([cx, cy]) => ({ x: cx * STEP, y: cy * STEP }));
 
 function OrbitTile({ project, slot, index, hovered, onHoverChange, onTouch, onFocusToggle, onDelete, onEditOpen }) {
   const heat = getHeatStatus(project.last_touched);
@@ -89,7 +92,7 @@ function OrbitTile({ project, slot, index, hovered, onHoverChange, onTouch, onFo
             transform: `translateZ(1px) scale(${raised ? 0.9 : 1})`,
           }}
         />
-        <div className="orbit-bob" style={{ "--bob-delay": `${-index * 1.25}s` }}>
+        <div className="orbit-bob" style={{ "--bob-delay": `${-index * 0.625}s` }}>
           <div
             className="orbit-lift"
             style={{ "--lift": `${lift}px`, "--lift-scale": hovered ? 1.05 : 1 }}
@@ -253,7 +256,7 @@ function GhostTile({ slot, index, canAdd, onAdd }) {
     >
       <div className="orbit-counter">
         <div className="orbit-shadow" style={{ opacity: 0.3 }} />
-        <div className="orbit-bob" style={{ "--bob-delay": `${-index * 1.25}s` }}>
+        <div className="orbit-bob" style={{ "--bob-delay": `${-index * 0.625}s` }}>
           <div className="orbit-stand">
           <button
             onClick={canAdd ? onAdd : undefined}
@@ -320,7 +323,7 @@ export default function OrbitStage({ projects, onTouch, onFocusToggle, onDelete,
           marginLeft: size ? (size.width - DESIGN_W) / 2 : undefined,
         }}
       >
-        <div className="orbit-plane" style={{ position: "absolute", left: "50%", top: "62%", width: 0, height: 0 }}>
+        <div className="orbit-plane" style={{ position: "absolute", left: "50%", top: "63%", width: 0, height: 0 }}>
           <AnimatePresence>
             {SLOTS.map((slot, i) => {
               const project = ordered[i];

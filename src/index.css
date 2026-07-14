@@ -116,9 +116,9 @@
 
 /* ---------------------------------------------------------------------------
    Iso-orbit stage
-   A tilted plane swings about its own normal (±9° around the 45° pose, 18°
-   total sweep, 10s loop) while each tile counter-swings by the exact opposite
-   angle on the same easing. Net effect: tile positions sweep back and forth
+   A tilted plane swings about its own normal (±25° around the 45° pose —
+   measured from the animo reference video — on a 10s sine loop) while each
+   tile counter-swings by the exact opposite angle on the same easing. Net effect: tile positions sweep back and forth
    but every card keeps a constant, readable orientation. Each tile also bobs
    along the plane normal on its own phase. Hovering any card adds
    .orbit-paused to the scene, freezing swing + counter-swing + bob together
@@ -130,8 +130,8 @@
 .orbit-plane {
   position: relative;
   transform-style: preserve-3d;
-  transform: rotateX(68deg) rotateZ(45deg);
-  animation: orbit-swing 7s ease-in-out infinite;
+  transform: rotateX(63deg) rotateZ(45deg);
+  animation: orbit-swing 10s ease-in-out infinite;
   will-change: transform;
 }
 .orbit-slot {
@@ -143,24 +143,24 @@
   height: 100%;
   transform-style: preserve-3d;
   transform: rotateZ(-45deg);
-  animation: orbit-counter-swing 7s ease-in-out infinite;
+  animation: orbit-counter-swing 10s ease-in-out infinite;
 }
 /* Stands the card up from the tilted floor toward the viewer: the plane is
-   pitched 68°, so -50° leaves the face ~18° from vertical — face-on with a
+   pitched 63°, so -45° leaves the face ~18° from vertical — face-on with a
    hint of depth. Hinged at the bottom edge so cards rise off their tiles and
    shadows stay on the floor. */
 .orbit-stand {
   width: 100%;
   height: 100%;
   transform-style: preserve-3d;
-  transform: rotateX(-50deg);
+  transform: rotateX(-45deg);
   transform-origin: 50% 100%;
 }
 .orbit-bob {
   width: 100%;
   height: 100%;
   transform-style: preserve-3d;
-  animation: orbit-bob var(--bob-duration, 10s) ease-in-out var(--bob-delay, 0s) infinite;
+  animation: orbit-bob var(--bob-duration, 5s) ease-in-out var(--bob-delay, 0s) infinite;
 }
 .orbit-lift {
   width: 100%;
@@ -185,12 +185,12 @@
 }
 
 @keyframes orbit-swing {
-  0%, 100% { transform: rotateX(68deg) rotateZ(36deg); }
-  50%      { transform: rotateX(68deg) rotateZ(54deg); }
+  0%, 100% { transform: rotateX(63deg) rotateZ(70deg); }
+  50%      { transform: rotateX(63deg) rotateZ(20deg); }
 }
 @keyframes orbit-counter-swing {
-  0%, 100% { transform: rotateZ(-36deg); }
-  50%      { transform: rotateZ(-54deg); }
+  0%, 100% { transform: rotateZ(-70deg); }
+  50%      { transform: rotateZ(-20deg); }
 }
 @keyframes orbit-bob {
   0%, 100% { transform: translateZ(0px); }
