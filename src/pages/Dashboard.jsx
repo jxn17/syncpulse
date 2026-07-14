@@ -41,6 +41,16 @@ export default function Dashboard() {
   const handleDelete = (id) => setProjects(p => p.filter(x => x.id !== id));
   const handleEdit = (updated) => setProjects(p => p.map(x => x.id === updated.id ? updated : x));
 
+  const handleReorder = async (idsInOrder) => {
+    const orderMap = new Map(idsInOrder.map((id, idx) => [id, idx]));
+    // Update local state synchronously so the cards settle into place without a flash.
+    setProjects(p => p.map(x => orderMap.has(x.id) ? { ...x, order: orderMap.get(x.id) } : x));
+    // Persist the new order.
+    for (const [id, idx] of orderMap) {
+      await db.entities.Project.update(id, { order: idx });
+    }
+  };
+
   const handleTouch = (id, now, streak) => {
     setProjects(p => p.map(x => x.id === id
       ? { ...x, last_touched: now, touch_count: (x.touch_count || 0) + 1, streak }
@@ -223,6 +233,7 @@ export default function Dashboard() {
             onFocusToggle={handleFocusToggle}
             onTouch={handleTouch}
             onEdit={handleEdit}
+            onReorder={handleReorder}
             onAdd={atCapacity ? null : () => setShowAdd(true)}
           />
         </div>
