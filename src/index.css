@@ -7,7 +7,7 @@
 
 @layer base {
   :root {
-    --background: 250 28% 5%;
+    --background: 247 12% 9%;
     --foreground: 250 30% 96%;
     --card: 250 22% 9%;
     --card-foreground: 250 30% 96%;
@@ -116,13 +116,13 @@
 
 /* ---------------------------------------------------------------------------
    Iso-orbit stage
-   A tilted plane spins slowly about its own normal (the "orbit") while each
-   tile counter-rotates by the exact opposite angle. Net effect: tile positions
-   sweep around the center but every card keeps a constant, readable
-   orientation — a carousel, not a record player. Each tile also bobs along the
-   plane normal on its own phase. Hovering any card adds .orbit-paused to the
-   scene, freezing spin + counter-spin + bob together (same play-state, so the
-   spin/counter pair never desyncs).
+   A tilted plane swings about its own normal (±13.5° around the 45° pose, 27°
+   total sweep, 10s loop) while each tile counter-swings by the exact opposite
+   angle on the same easing. Net effect: tile positions sweep back and forth
+   but every card keeps a constant, readable orientation. Each tile also bobs
+   along the plane normal on its own phase. Hovering any card adds
+   .orbit-paused to the scene, freezing swing + counter-swing + bob together
+   (same play-state, so the pair never desyncs).
 --------------------------------------------------------------------------- */
 .orbit-scene {
   perspective: 1500px;
@@ -130,8 +130,8 @@
 .orbit-plane {
   position: relative;
   transform-style: preserve-3d;
-  transform: rotateX(54deg) rotateZ(45deg);
-  animation: orbit-spin 90s linear infinite;
+  transform: rotateX(63deg) rotateZ(45deg);
+  animation: orbit-swing 10s ease-in-out infinite;
   will-change: transform;
 }
 .orbit-slot {
@@ -143,13 +143,13 @@
   height: 100%;
   transform-style: preserve-3d;
   transform: rotateZ(-45deg);
-  animation: orbit-counter 90s linear infinite;
+  animation: orbit-counter-swing 10s ease-in-out infinite;
 }
 .orbit-bob {
   width: 100%;
   height: 100%;
   transform-style: preserve-3d;
-  animation: orbit-bob var(--bob-duration, 6s) ease-in-out var(--bob-delay, 0s) infinite;
+  animation: orbit-bob var(--bob-duration, 10s) ease-in-out var(--bob-delay, 0s) infinite;
 }
 .orbit-lift {
   width: 100%;
@@ -161,7 +161,7 @@
 .orbit-shadow {
   position: absolute;
   inset: 6%;
-  border-radius: 28px;
+  border-radius: 10px;
   background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), transparent 78%);
   transform: translateZ(1px);
   transition: opacity 0.45s ease, transform 0.45s ease;
@@ -173,13 +173,13 @@
   animation-play-state: paused;
 }
 
-@keyframes orbit-spin {
-  from { transform: rotateX(54deg) rotateZ(0deg); }
-  to   { transform: rotateX(54deg) rotateZ(360deg); }
+@keyframes orbit-swing {
+  0%, 100% { transform: rotateX(63deg) rotateZ(31.5deg); }
+  50%      { transform: rotateX(63deg) rotateZ(58.5deg); }
 }
-@keyframes orbit-counter {
-  from { transform: rotateZ(0deg); }
-  to   { transform: rotateZ(-360deg); }
+@keyframes orbit-counter-swing {
+  0%, 100% { transform: rotateZ(-31.5deg); }
+  50%      { transform: rotateZ(-58.5deg); }
 }
 @keyframes orbit-bob {
   0%, 100% { transform: translateZ(0px); }

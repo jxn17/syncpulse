@@ -8,10 +8,14 @@ import EditProjectModal from "@/components/EditProjectModal";
 import { MAX_PROJECTS } from "@/components/AddProjectModal";
 
 const TILE = 200;
-const GAP = 48;
+const GAP = Math.round(TILE * 0.18); // spacing 18%
 const STEP = TILE + GAP;
-const DESIGN_W = 1100;
-const DESIGN_H = 700;
+const RADIUS = Math.round(TILE * 0.03); // corner radius 3%
+const STAGE_PAD = 0.06; // padding 6%
+// The swing (±13.5°) never completes a revolution, so the sweep footprint is
+// far smaller than a full spin — these bounds hug the swept extremes.
+const DESIGN_W = 980;
+const DESIGN_H = 560;
 
 // 8 slots, 4 x 2, centered on the plane origin.
 const SLOTS = Array.from({ length: MAX_PROJECTS }, (_, i) => ({
@@ -71,10 +75,7 @@ function OrbitTile({ project, slot, index, hovered, onHoverChange, onTouch, onFo
             transform: `translateZ(1px) scale(${raised ? 0.9 : 1})`,
           }}
         />
-        <div
-          className="orbit-bob"
-          style={{ "--bob-duration": `${5.5 + (index % 4) * 0.9}s`, "--bob-delay": `${-index * 0.85}s` }}
-        >
+        <div className="orbit-bob" style={{ "--bob-delay": `${-index * 1.25}s` }}>
           <div
             className="orbit-lift"
             style={{ "--lift": `${lift}px`, "--lift-scale": hovered ? 1.05 : 1 }}
@@ -86,8 +87,9 @@ function OrbitTile({ project, slot, index, hovered, onHoverChange, onTouch, onFo
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.5 }}
               transition={{ type: "spring", stiffness: 260, damping: 22, delay: index * 0.06 }}
-              className="group relative w-full h-full rounded-3xl border p-4 flex flex-col overflow-hidden"
+              className="group relative w-full h-full border p-4 flex flex-col overflow-hidden"
               style={{
+                borderRadius: RADIUS,
                 background: "linear-gradient(160deg, hsl(250 22% 13%) 0%, hsl(250 25% 8%) 100%)",
                 borderColor: project.is_focused ? accentColor : "hsl(250 16% 20%)",
                 boxShadow: project.is_focused
@@ -223,14 +225,12 @@ function GhostTile({ slot, index, canAdd, onAdd }) {
     >
       <div className="orbit-counter">
         <div className="orbit-shadow" style={{ opacity: 0.3 }} />
-        <div
-          className="orbit-bob"
-          style={{ "--bob-duration": `${5.5 + (index % 4) * 0.9}s`, "--bob-delay": `${-index * 0.85}s` }}
-        >
+        <div className="orbit-bob" style={{ "--bob-delay": `${-index * 1.25}s` }}>
           <button
             onClick={canAdd ? onAdd : undefined}
             disabled={!canAdd}
-            className={`w-full h-full rounded-3xl border-2 border-dashed border-white/10 bg-white/[0.02] flex flex-col items-center justify-center gap-2 transition-colors ${
+            style={{ borderRadius: RADIUS }}
+            className={`w-full h-full border-2 border-dashed border-white/10 bg-white/[0.02] flex flex-col items-center justify-center gap-2 transition-colors ${
               canAdd ? "hover:border-primary/50 hover:bg-primary/5 cursor-pointer" : "cursor-default"
             }`}
           >
@@ -258,7 +258,20 @@ export default function OrbitStage({ projects, onTouch, onFocusToggle, onDelete,
     [projects]
   );
 
-  const scale = size ? Math.min(1, size.width / DESIGN_W) : 1;
+  // Zoom to fill: as large as the container width and the remaining viewport
+  // height allow (6% stage padding on both axes), so the swing never leaves
+  // the screen.
+  const scale = useMemo(() => {
+    if (!size) return 1;
+    const el = containerRef.current;
+    const availH = el
+      ? Math.max(320, window.innerHeight - el.getBoundingClientRect().top + window.scrollY - 24)
+      : DESIGN_H;
+    return Math.min(
+      (size.width * (1 - STAGE_PAD)) / DESIGN_W,
+      (availH * (1 - STAGE_PAD)) / DESIGN_H
+    );
+  }, [size]);
   const paused = hoveredId !== null || editingProject !== null;
 
   const handleHoverChange = (id, isIn) => {
@@ -268,16 +281,16 @@ export default function OrbitStage({ projects, onTouch, onFocusToggle, onDelete,
   return (
     <div ref={containerRef} className="w-full" style={{ height: DESIGN_H * scale }}>
       <div
-        className={`orbit-scene relative mx-auto ${paused ? "orbit-paused" : ""}`}
+        className={`orbit-scene relative ${paused ? "orbit-paused" : ""}`}
         style={{
           width: DESIGN_W,
           height: DESIGN_H,
           transform: `scale(${scale})`,
           transformOrigin: "top center",
-          marginLeft: size && size.width < DESIGN_W ? (size.width - DESIGN_W) / 2 : undefined,
+          marginLeft: size ? (size.width - DESIGN_W) / 2 : undefined,
         }}
       >
-        <div className="orbit-plane" style={{ position: "absolute", left: "50%", top: "54%", width: 0, height: 0 }}>
+        <div className="orbit-plane" style={{ position: "absolute", left: "50%", top: "56%", width: 0, height: 0 }}>
           <AnimatePresence>
             {SLOTS.map((slot, i) => {
               const project = ordered[i];

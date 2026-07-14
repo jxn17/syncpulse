@@ -195,34 +195,37 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Projects — floating orbit stage on desktop, flat grid on touch/mobile */}
-        {!loading && projects.length > 0 && (
-          isMobile ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {projects.map(project => (
-                <ProjectCard
-                  key={project.id}
-                  project={project}
-                  onDelete={handleDelete}
-                  onFocusToggle={handleFocusToggle}
-                  onTouch={handleTouch}
-                  onEdit={handleEdit}
-                  isFocusedElsewhere={!!focusedProject && !project.is_focused}
-                />
-              ))}
-            </div>
-          ) : (
-            <OrbitStage
-              projects={projects}
-              onDelete={handleDelete}
-              onFocusToggle={handleFocusToggle}
-              onTouch={handleTouch}
-              onEdit={handleEdit}
-              onAdd={atCapacity ? null : () => setShowAdd(true)}
-            />
-          )
+        {/* Projects — flat grid on touch/mobile */}
+        {!loading && projects.length > 0 && isMobile && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {projects.map(project => (
+              <ProjectCard
+                key={project.id}
+                project={project}
+                onDelete={handleDelete}
+                onFocusToggle={handleFocusToggle}
+                onTouch={handleTouch}
+                onEdit={handleEdit}
+                isFocusedElsewhere={!!focusedProject && !project.is_focused}
+              />
+            ))}
+          </div>
         )}
       </div>
+
+      {/* Orbit stage — full-bleed on desktop so the zoom can fill the screen */}
+      {!loading && projects.length > 0 && !isMobile && (
+        <div className="relative w-full">
+          <OrbitStage
+            projects={projects}
+            onDelete={handleDelete}
+            onFocusToggle={handleFocusToggle}
+            onTouch={handleTouch}
+            onEdit={handleEdit}
+            onAdd={atCapacity ? null : () => setShowAdd(true)}
+          />
+        </div>
+      )}
 
       {showAdd && (
         <AddProjectModal
