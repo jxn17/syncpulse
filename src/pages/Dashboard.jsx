@@ -4,10 +4,12 @@ import { Plus, Github, CheckCircle2, Bell, Settings } from "lucide-react";
 
 import { isToday, differenceInDays } from "date-fns";
 import ProjectCard from "@/components/ProjectCard";
-import AddProjectModal from "@/components/AddProjectModal";
+import AddProjectModal, { MAX_PROJECTS } from "@/components/AddProjectModal";
+import OrbitStage from "@/components/OrbitStage";
 import SettingsModal from "@/components/SettingsModal";
 import NeglectAlert from "@/components/NeglectAlert";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function Dashboard() {
   const [projects, setProjects] = useState([]);
@@ -16,6 +18,7 @@ export default function Dashboard() {
   const [showSettings, setShowSettings] = useState(false);
   const [appSettings, setAppSettings] = useState(null);
   const { permission, requestPermission } = useNotifications(projects, appSettings);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     loadProjects();
@@ -62,13 +65,15 @@ export default function Dashboard() {
   const focusedProject = projects.find(p => p.is_focused);
   const touchedToday = projects.filter(p => p.last_touched && isToday(new Date(p.last_touched))).length;
   const totalProjects = projects.length;
+  const atCapacity = totalProjects >= MAX_PROJECTS;
   const coldProjects = projects.filter(p => {
     if (!p.last_touched) return true;
     return differenceInDays(new Date(), new Date(p.last_touched)) >= 2;
   }).length;
 
   return (
-    <div className="min-h-screen bg-background pixel-bg">
+    <div className="relative min-h-screen bg-background pixel-bg overflow-x-hidden">
+      <div className="aurora pointer-events-none absolute inset-0" />
       <NeglectAlert
         projects={projects}
         focusedProject={focusedProject}
@@ -76,7 +81,7 @@ export default function Dashboard() {
         onRequestPermission={requestPermission}
       />
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="relative max-w-6xl mx-auto px-4 py-8">
 
         {/* Header */}
         <div className="mb-8">
@@ -113,10 +118,13 @@ export default function Dashboard() {
               </button>
               <button
                 onClick={() => setShowAdd(true)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl font-heading font-semibold text-sm transition-all hover:opacity-90 glow-purple"
+                disabled={atCapacity}
+                title={atCapacity ? `All ${MAX_PROJECTS} slots are in use` : "Add a project"}
+                className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-xl font-heading font-semibold text-sm transition-all hover:opacity-90 glow-purple disabled:opacity-40 disabled:shadow-none"
               >
                 <Plus size={16} />
                 New Project
+                <span className="font-mono text-[10px] opacity-80">{totalProjects}/{MAX_PROJECTS}</span>
               </button>
             </div>
           </div>
@@ -187,21 +195,32 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Projects grid */}
+        {/* Projects — floating orbit stage on desktop, flat grid on touch/mobile */}
         {!loading && projects.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {projects.map(project => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                onDelete={handleDelete}
-                onFocusToggle={handleFocusToggle}
-                onTouch={handleTouch}
-                onEdit={handleEdit}
-                isFocusedElsewhere={!!focusedProject && !project.is_focused}
-              />
-            ))}
-          </div>
+          isMobile ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {projects.map(project => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  onDelete={handleDelete}
+                  onFocusToggle={handleFocusToggle}
+                  onTouch={handleTouch}
+                  onEdit={handleEdit}
+                  isFocusedElsewhere={!!focusedProject && !project.is_focused}
+                />
+              ))}
+            </div>
+          ) : (
+            <OrbitStage
+              projects={projects}
+              onDelete={handleDelete}
+              onFocusToggle={handleFocusToggle}
+              onTouch={handleTouch}
+              onEdit={handleEdit}
+              onAdd={atCapacity ? null : () => setShowAdd(true)}
+            />
+          )
         )}
       </div>
 
@@ -209,6 +228,7 @@ export default function Dashboard() {
         <AddProjectModal
           onClose={() => setShowAdd(false)}
           onAdded={loadProjects}
+          projectCount={totalProjects}
         />
       )}
 
