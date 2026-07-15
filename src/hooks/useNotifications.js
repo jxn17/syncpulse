@@ -55,6 +55,7 @@ export function useNotifications(projects, settings) {
   const timerRef = useRef(null);
   const firstRunRef = useRef(null);
   const firstRunDone = useRef(false);
+  const lastCheckRef = useRef(0);          // timestamp of the last runCheck call
   const projectsRef = useRef(projects);
   const settingsRef = useRef(settings);
 
@@ -99,6 +100,8 @@ export function useNotifications(projects, settings) {
     if (!currentSettings?.notifications_enabled) return;
     if (!currentProjects || currentProjects.length === 0) return;
 
+    lastCheckRef.current = Date.now();
+
     const untouched = currentProjects.filter(p => !p.last_touched || !isToday(new Date(p.last_touched)));
     const focused = currentProjects.find(p => p.is_focused);
 
@@ -136,14 +139,31 @@ export function useNotifications(projects, settings) {
 
   // In-page reminder timer while the app is open; the service worker's
   // periodic background sync covers the app-closed case where supported.
+  //
+  // Browsers freeze long-interval timers in background tabs — a single
+  // 15-minute setInterval may never fire. Instead we poll every 60 seconds
+  // (Chrome allows ~1/min even in throttled tabs) and check if the user's
+  // configured interval has elapsed since the last notification.
+  // A visibilitychange listener is the final safety net for fully-frozen tabs.
   useEffect(() => {
     if (!settings) return;
-    const intervalMs = (settings.notify_interval_minutes || 30) * 60 * 1000;
 
     if (timerRef.current) clearInterval(timerRef.current);
 
     if (settings.notifications_enabled) {
-      timerRef.current = setInterval(runCheck, intervalMs);
+      const POLL_MS = 60_000; // 60 s — survives background-tab throttling
+
+      const maybeCheck = () => {
+        const s = settingsRef.current;
+        if (!s?.notifications_enabled) return;
+        const gap = (s.notify_interval_minutes || 30) * 60 * 1000;
+        if (Date.now() - lastCheckRef.current >= gap) {
+          runCheck();
+        }
+      };
+
+      timerRef.current = setInterval(maybeCheck, POLL_MS);
+
       if (permission === "granted") {
         registerPeriodicSync(settings.notify_interval_minutes);
         // Nudge once shortly after load so a reminder actually fires without
@@ -155,9 +175,22 @@ export function useNotifications(projects, settings) {
       }
     }
 
+    // Catch-up when the tab wakes from a fully-frozen state.
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      const s = settingsRef.current;
+      if (!s?.notifications_enabled) return;
+      const gap = (s.notify_interval_minutes || 30) * 60 * 1000;
+      if (Date.now() - lastCheckRef.current >= gap) {
+        runCheck();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (firstRunRef.current) clearTimeout(firstRunRef.current);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [settings?.notify_interval_minutes, settings?.notifications_enabled, permission, runCheck]);
 

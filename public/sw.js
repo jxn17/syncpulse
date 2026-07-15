@@ -111,7 +111,11 @@ async function checkProjects() {
         "focus-lock"
       );
     }
-    return;
+    return notify(
+      "✅ All projects touched today!",
+      `Keep it up. You're in ${focused.name} — great focus.`,
+      "all-good"
+    );
   }
 
   if (untouched.length > 0) {
@@ -122,6 +126,12 @@ async function checkProjects() {
       "cold-projects"
     );
   }
+
+  return notify(
+    `✅ All ${snap.projects.length} projects touched today!`,
+    "You're on a roll. Keep the streak alive.",
+    "all-done"
+  );
 }
 
 // Fires while the app is closed on browsers that support it (Chromium/Android).
