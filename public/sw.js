@@ -1,6 +1,6 @@
 /* SyncPulse service worker: offline app shell + notifications. */
 
-const CACHE = "syncpulse-v1";
+const CACHE = "syncpulse-v2";
 const APP_SHELL = ["/", "/manifest.json", "/favicon.svg", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -76,6 +76,48 @@ function readSnapshot() {
   });
 }
 
+// Small key/value helpers on the same IndexedDB store, used to de-duplicate
+// push-triggered notifications (the cron may ping more often than the user's
+// chosen interval).
+function kvGet(key) {
+  return new Promise((resolve) => {
+    const req = indexedDB.open("syncpulse", 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("kv");
+    req.onerror = () => resolve(null);
+    req.onsuccess = () => {
+      const db = req.result;
+      try {
+        const get = db.transaction("kv", "readonly").objectStore("kv").get(key);
+        get.onsuccess = () => { resolve(get.result ?? null); db.close(); };
+        get.onerror = () => { resolve(null); db.close(); };
+      } catch {
+        resolve(null);
+        db.close();
+      }
+    };
+  });
+}
+
+function kvSet(key, value) {
+  return new Promise((resolve) => {
+    const req = indexedDB.open("syncpulse", 1);
+    req.onupgradeneeded = () => req.result.createObjectStore("kv");
+    req.onerror = () => resolve(false);
+    req.onsuccess = () => {
+      const db = req.result;
+      try {
+        const tx = db.transaction("kv", "readwrite");
+        tx.objectStore("kv").put(value, key);
+        tx.oncomplete = () => { resolve(true); db.close(); };
+        tx.onabort = () => { resolve(false); db.close(); };
+      } catch {
+        resolve(false);
+        db.close();
+      }
+    };
+  });
+}
+
 function touchedToday(iso) {
   if (!iso) return false;
   const d = new Date(iso);
@@ -93,51 +135,60 @@ function notify(title, body, tag) {
   });
 }
 
-async function checkProjects() {
+// Background check for push / periodic sync. Unlike checkProjects (used by the
+// open app), this stays quiet: it only notifies when something actually needs a
+// touch, and never more often than the user's chosen interval — so a cron that
+// pings every hour won't nag someone who set a 3-hour reminder or already
+// touched everything.
+async function backgroundCheck() {
   const snap = await readSnapshot();
   if (!snap || !snap.projects || snap.projects.length === 0) return;
   if (snap.settings && snap.settings.notifications_enabled === false) return;
 
+  const intervalMs = ((snap.settings && snap.settings.notify_interval_minutes) || 30) * 60 * 1000;
+  const last = (await kvGet("last_notified_at")) || 0;
+  // 0.9 factor so an interval-aligned cron isn't skipped by a few seconds of jitter.
+  if (Date.now() - last < intervalMs * 0.9) return;
+
   const untouched = snap.projects.filter((p) => !touchedToday(p.last_touched));
   const focused = snap.projects.find((p) => p.is_focused);
 
+  let shown = false;
   if (focused) {
     const cold = untouched.filter((p) => p.id !== focused.id);
     if (cold.length > 0) {
       const names = cold.slice(0, 3).map((p) => p.name).join(", ");
-      return notify(
+      await notify(
         `🔒 Focus lock — ${cold.length} project${cold.length > 1 ? "s" : ""} need a touch`,
         `Still in ${focused.name}. Don't forget: ${names}${cold.length > 3 ? ` +${cold.length - 3} more` : ""}`,
-        "focus-lock"
+        "cold-projects"
       );
+      shown = true;
     }
-    return notify(
-      "✅ All projects touched today!",
-      `Keep it up. You're in ${focused.name} — great focus.`,
-      "all-good"
-    );
-  }
-
-  if (untouched.length > 0) {
+  } else if (untouched.length > 0) {
     const names = untouched.slice(0, 3).map((p) => p.name).join(", ");
-    return notify(
+    await notify(
       `🧊 ${untouched.length} project${untouched.length > 1 ? "s" : ""} not touched today`,
       names + (untouched.length > 3 ? ` +${untouched.length - 3} more` : ""),
       "cold-projects"
     );
+    shown = true;
   }
 
-  return notify(
-    `✅ All ${snap.projects.length} projects touched today!`,
-    "You're on a roll. Keep the streak alive.",
-    "all-done"
-  );
+  if (shown) await kvSet("last_notified_at", Date.now());
 }
+
+// Web Push: delivered even when the app is fully closed (incl. installed iOS
+// PWAs). The payload is a content-less trigger — all "what to show" logic is
+// on-device, reading the local snapshot above.
+self.addEventListener("push", (event) => {
+  event.waitUntil(backgroundCheck());
+});
 
 // Fires while the app is closed on browsers that support it (Chromium/Android).
 self.addEventListener("periodicsync", (event) => {
   if (event.tag === "syncpulse-check") {
-    event.waitUntil(checkProjects());
+    event.waitUntil(backgroundCheck());
   }
 });
 

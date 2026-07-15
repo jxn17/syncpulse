@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { isToday } from "date-fns";
+import { subscribeToPush } from "@/lib/push";
 
 const supported = typeof window !== "undefined" && "Notification" in window;
 
@@ -62,11 +63,20 @@ export function useNotifications(projects, settings) {
   useEffect(() => { projectsRef.current = projects; }, [projects]);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
 
+  // If permission was already granted in a previous session, make sure this
+  // browser is (still) registered for Web Push — subscriptions can be dropped
+  // by the browser, and the server may have pruned a stale one.
+  useEffect(() => {
+    if (permission === "granted") subscribeToPush();
+  }, [permission]);
+
   const requestPermission = async () => {
     if (!supported) return "unsupported";
     const result = await Notification.requestPermission();
     setPermission(result);
     if (result === "granted") {
+      // Web Push is what delivers reminders when the app is fully closed.
+      subscribeToPush();
       registerPeriodicSync(settingsRef.current?.notify_interval_minutes);
       // Confirm right away so it's obvious notifications are live.
       showNotification(
