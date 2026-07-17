@@ -182,6 +182,24 @@ async function backgroundCheck() {
 // PWAs). The payload is a content-less trigger — all "what to show" logic is
 // on-device, reading the local snapshot above.
 self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+  // Test trigger (/api/send?test=1): always show a notification, bypassing the
+  // cold-project and interval checks, so delivery can be verified on demand.
+  if (data.test) {
+    event.waitUntil(
+      notify(
+        "🔔 SyncPulse test push",
+        "Seeing this with the app closed means background notifications work.",
+        "test-push"
+      )
+    );
+    return;
+  }
   event.waitUntil(backgroundCheck());
 });
 

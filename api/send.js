@@ -42,7 +42,10 @@ export default async function handler(req, res) {
 
   const subsMap = (await redis.hgetall(SUBS_KEY)) || {};
   const entries = Object.entries(subsMap);
-  const payload = JSON.stringify({ type: "check", at: Date.now() });
+  // ?test=1 forces every device to show a test notification, bypassing the
+  // cold-project / interval logic — used to verify delivery on demand.
+  const isTest = req.query && (req.query.test === "1" || req.query.test === "true");
+  const payload = JSON.stringify({ type: isTest ? "test" : "check", test: !!isTest, at: Date.now() });
 
   let sent = 0;
   let removed = 0;
