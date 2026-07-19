@@ -63,12 +63,17 @@ export function useNotifications(projects, settings) {
   useEffect(() => { projectsRef.current = projects; }, [projects]);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
 
-  // If permission was already granted in a previous session, make sure this
-  // browser is (still) registered for Web Push — subscriptions can be dropped
-  // by the browser, and the server may have pruned a stale one.
+  // Keep the server-side push registration in sync: re-subscribe whenever
+  // permission is granted or the interval / on-off changes, so the server
+  // always knows this device's current reminder cadence. (Subscriptions can
+  // also be silently dropped by the browser — this re-registers them.)
   useEffect(() => {
-    if (permission === "granted") subscribeToPush();
-  }, [permission]);
+    if (permission !== "granted") return;
+    subscribeToPush({
+      interval: settings?.notify_interval_minutes,
+      enabled: settings?.notifications_enabled,
+    });
+  }, [permission, settings?.notify_interval_minutes, settings?.notifications_enabled]);
 
   const requestPermission = async () => {
     if (!supported) return "unsupported";
@@ -76,7 +81,10 @@ export function useNotifications(projects, settings) {
     setPermission(result);
     if (result === "granted") {
       // Web Push is what delivers reminders when the app is fully closed.
-      subscribeToPush();
+      subscribeToPush({
+        interval: settingsRef.current?.notify_interval_minutes,
+        enabled: settingsRef.current?.notifications_enabled,
+      });
       registerPeriodicSync(settingsRef.current?.notify_interval_minutes);
       // Confirm right away so it's obvious notifications are live.
       showNotification(

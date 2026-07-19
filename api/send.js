@@ -42,20 +42,41 @@ export default async function handler(req, res) {
 
   const subsMap = (await redis.hgetall(SUBS_KEY)) || {};
   const entries = Object.entries(subsMap);
-  // ?test=1 forces every device to show a test notification, bypassing the
-  // cold-project / interval logic — used to verify delivery on demand.
+  // ?test=1 forces every device to push right now, bypassing the interval
+  // gate — used to verify delivery on demand.
   const isTest = req.query && (req.query.test === "1" || req.query.test === "true");
   const payload = JSON.stringify({ type: isTest ? "test" : "check", test: !!isTest, at: Date.now() });
+  const now = Date.now();
 
   let sent = 0;
   let removed = 0;
+  let skipped = 0;
   await Promise.all(
     entries.map(async ([endpoint, raw]) => {
-      const sub = typeof raw === "string" ? safeParse(raw) : raw;
+      const rec = typeof raw === "string" ? safeParse(raw) : raw;
+      if (!rec) return;
+      // Accept both the record shape and the legacy raw-subscription shape.
+      const sub = rec.subscription || rec;
       if (!sub || !sub.endpoint) return;
+
+      // Per-device interval gate: only push once the user's chosen interval has
+      // elapsed since the last push to this device. This lets a fixed-cadence
+      // cron drive any interval, and means (almost) every push shows a
+      // notification — so the browser's silent-push budget isn't burned.
+      if (!isTest) {
+        if (rec.enabled === false) { skipped++; return; }
+        const intervalMs = (Number(rec.interval) > 0 ? Number(rec.interval) : 30) * 60000;
+        const last = Number(rec.lastPushedAt) || 0;
+        if (now - last < intervalMs * 0.9) { skipped++; return; }
+      }
+
       try {
         await webpush.sendNotification(sub, payload, { TTL: 900 });
         sent++;
+        if (!isTest) {
+          const updated = { ...rec, subscription: sub, lastPushedAt: now };
+          await redis.hset(SUBS_KEY, { [endpoint]: JSON.stringify(updated) });
+        }
       } catch (err) {
         // 404/410 mean the subscription is dead — prune it.
         if (err && (err.statusCode === 404 || err.statusCode === 410)) {
@@ -66,7 +87,7 @@ export default async function handler(req, res) {
     })
   );
 
-  return res.status(200).json({ ok: true, total: entries.length, sent, removed });
+  return res.status(200).json({ ok: true, total: entries.length, sent, skipped, removed });
 }
 
 function safeParse(s) {

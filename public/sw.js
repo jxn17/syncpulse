@@ -1,6 +1,6 @@
 /* SyncPulse service worker: offline app shell + notifications. */
 
-const CACHE = "syncpulse-v2";
+const CACHE = "syncpulse-v3";
 const APP_SHELL = ["/", "/manifest.json", "/favicon.svg", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -140,15 +140,20 @@ function notify(title, body, tag) {
 // touch, and never more often than the user's chosen interval — so a cron that
 // pings every hour won't nag someone who set a 3-hour reminder or already
 // touched everything.
-async function backgroundCheck() {
+async function backgroundCheck(options) {
+  const skipInterval = options && options.skipInterval;
   const snap = await readSnapshot();
   if (!snap || !snap.projects || snap.projects.length === 0) return;
   if (snap.settings && snap.settings.notifications_enabled === false) return;
 
-  const intervalMs = ((snap.settings && snap.settings.notify_interval_minutes) || 30) * 60 * 1000;
-  const last = (await kvGet("last_notified_at")) || 0;
-  // 0.9 factor so an interval-aligned cron isn't skipped by a few seconds of jitter.
-  if (Date.now() - last < intervalMs * 0.9) return;
+  // The interval gate: skipped for Web Push (the server already enforces the
+  // user's interval), applied for periodic sync (which has no server gate).
+  if (!skipInterval) {
+    const intervalMs = ((snap.settings && snap.settings.notify_interval_minutes) || 30) * 60 * 1000;
+    const last = (await kvGet("last_notified_at")) || 0;
+    // 0.9 factor so an interval-aligned tick isn't skipped by a few seconds of jitter.
+    if (Date.now() - last < intervalMs * 0.9) return;
+  }
 
   const untouched = snap.projects.filter((p) => !touchedToday(p.last_touched));
   const focused = snap.projects.find((p) => p.is_focused);
@@ -200,7 +205,8 @@ self.addEventListener("push", (event) => {
     );
     return;
   }
-  event.waitUntil(backgroundCheck());
+  // Server already gated by the user's interval, so don't re-throttle here.
+  event.waitUntil(backgroundCheck({ skipInterval: true }));
 });
 
 // Fires while the app is closed on browsers that support it (Chromium/Android).

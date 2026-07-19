@@ -23,10 +23,12 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 // Subscribes this browser to Web Push and registers the subscription with the
-// server. Safe to call repeatedly — reuses an existing subscription. Returns
-// null when push isn't available (e.g. dev with no service worker, or an
-// unsupported browser) rather than throwing.
-export async function subscribeToPush() {
+// server, along with the user's chosen reminder interval and on/off state — the
+// server uses these to decide how often to actually push, so a fixed-cadence
+// cron can drive any interval you pick in-app. Safe to call repeatedly (reuses
+// an existing subscription); call it again whenever the interval changes.
+// Returns null when push isn't available (dev with no SW, unsupported browser).
+export async function subscribeToPush(config = {}) {
   if (!pushSupported() || !VAPID_PUBLIC_KEY) return null;
   try {
     const existing = await navigator.serviceWorker.getRegistration();
@@ -44,7 +46,11 @@ export async function subscribeToPush() {
     await fetch("/api/subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(sub),
+      body: JSON.stringify({
+        subscription: sub,
+        interval: config.interval,
+        enabled: config.enabled,
+      }),
     });
     return sub;
   } catch {

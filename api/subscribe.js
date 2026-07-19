@@ -14,16 +14,26 @@ export default async function handler(req, res) {
     typeof req.body === "string" ? safeParse(req.body) : req.body || {};
 
   if (req.method === "POST") {
-    if (!body || !body.endpoint) {
+    // New shape: { subscription, interval, enabled }. Older clients posted the
+    // raw subscription — accept both.
+    const sub = body && body.subscription ? body.subscription : body;
+    if (!sub || !sub.endpoint) {
       return res.status(400).json({ error: "invalid subscription" });
     }
-    await redis.hset(SUBS_KEY, { [body.endpoint]: JSON.stringify(body) });
+    const interval = Number(body.interval) > 0 ? Number(body.interval) : 30;
+    const enabled = body.enabled !== false;
+    // lastPushedAt resets to 0 so a newly changed interval takes effect on the
+    // very next cron beat instead of waiting out the old schedule.
+    const record = { subscription: sub, interval, enabled, lastPushedAt: 0 };
+    await redis.hset(SUBS_KEY, { [sub.endpoint]: JSON.stringify(record) });
     return res.status(201).json({ ok: true });
   }
 
   if (req.method === "DELETE") {
-    if (body && body.endpoint) {
-      await redis.hdel(SUBS_KEY, body.endpoint);
+    const endpoint =
+      (body && body.endpoint) || (body && body.subscription && body.subscription.endpoint);
+    if (endpoint) {
+      await redis.hdel(SUBS_KEY, endpoint);
     }
     return res.status(200).json({ ok: true });
   }
